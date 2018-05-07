@@ -1,14 +1,8 @@
 -module(koordinator).
 -export([start/0, init_coordinator/0, initial/1, twenty_percent_of/1, handle_briefterm/4, set_initial_mis/3]).
 
-log(Message) ->
-  Logfile = list_to_atom(lists:concat(["Koordinator@", atom_to_list(node()), ".log"])),
-  FullMessage = Message ++ ["\n"],
-  util:logging(Logfile, lists:concat(FullMessage)),
-  Logfile.
-
 maybe_log_wrong_term(CmiReceived, MinimumCmi) when CmiReceived > MinimumCmi ->
-  log(["Error! Received terminated ggT is bigger than the smalles received ggT (", integer_to_list(CmiReceived), ",", integer_to_list(MinimumCmi), ")"]);
+  util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Error! Received terminated ggT is bigger than the smalles received ggT (" ++ integer_to_list(CmiReceived) ++ "," ++ integer_to_list(MinimumCmi) ++ ")\n");
 maybe_log_wrong_term(_CmiReceived, _MinimumCmi) when true ->
   ok.
 
@@ -16,17 +10,17 @@ handle_briefterm(ActVal, CMi, ClientName, CZeit) ->
   Minimum = maps:get(smallestGgT, ActVal),
   if
     CMi > Minimum ->
-      log(["Trying to correct with sending ", integer_to_list(Minimum), " to ", atom_to_list(ClientName), " at ", vsutil:now2string(CZeit)]),
+      util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Trying to correct with sending " ++ integer_to_list(Minimum) ++ " to " ++ atom_to_list(ClientName) ++ " at " ++ vsutil:now2string(CZeit) ++ "\n"),
       maps:get(ClientName, maps:get(clientsToPID, ActVal)) ! {sendy, Minimum};
     true ->
-      log([atom_to_list(ClientName), " reports correct termination with ggT ", CMi, " at ", vsutil:now2string(CZeit)])
+      util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), atom_to_list(ClientName) ++ " reports correct termination with ggT " ++ CMi ++ " at " ++ vsutil:now2string(CZeit) ++ "\n")
   end.
 
 prompt_all_ggt(_ClientsToPID, []) -> ok;
 prompt_all_ggt(ClientsToPID, [Client | RestClients]) ->
   maps:get(Client, ClientsToPID) ! {self(), tellmi},
   receive
-    {mi, Mi} -> log(["client: ", Client, " has mi: ", Mi])
+    {mi, Mi} -> util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "client: " ++ Client ++ " has mi: " ++ Mi ++ "\n")
   end,
   prompt_all_ggt(ClientsToPID, RestClients).
 
@@ -36,11 +30,11 @@ check_status_all_ggt(ClientsToPID, [Client | RestClients]) ->
   PingResponse = net_adm:ping(ClientNode),
   if
     PingResponse =:= pang ->
-      log(["client node of ", Client, " is dead"]);
+      util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "client node of " ++ Client ++ " is dead\n");
     true ->
       {ClientName, ClientNode} ! {self(), pingGGT},
       receive
-        {pongGGT, GgTName} -> log(["ggT-Process: ", GgTName, " is alive"])
+        {pongGGT, GgTName} -> util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "ggT-Process: " ++ GgTName ++ " is alive\n")
       end
   end,
   check_status_all_ggt(ClientsToPID, RestClients).
@@ -74,7 +68,7 @@ set_initial_mis([Mi | Tail], [Client | ClientTail], ClientsToPID) ->
 
 -spec start_calculation(integer(), list(), map()) -> any().
 start_calculation(WggT, Clients, ClientsToPID) ->
-  log(["Start calculation for ggT: ", integer_to_list(WggT)]),
+  util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Start calculation for ggT: " ++ integer_to_list(WggT) ++ "\n"),
   Mis = vsutil:bestimme_mis(WggT, length(Clients)),
   set_initial_mis(Mis, Clients, ClientsToPID),
   StartingClients = twenty_percent_of(Clients),
@@ -93,7 +87,7 @@ calculation(ActVal) ->
       {ok, CorrectFlag} = vsutil:get_config_value(korrigieren, Config),
       NewFlag = (CorrectFlag + 1) rem 2,
       UpdatedActVal = maps:update(config, lists:keyreplace(korrigieren, 1, Config, {korrigieren, NewFlag}), ActVal),
-      log(["Correct flag is now set to: ", NewFlag, " from: ", CorrectFlag]),
+      util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Correct flag is now set to: " ++ NewFlag ++ " from: " ++ CorrectFlag ++ "\n"),
       calculation(UpdatedActVal);
   % Ask all ggTs current Mi
     prompt ->
@@ -107,7 +101,7 @@ calculation(ActVal) ->
       shutdown(ActVal);
   % ggT process signals its mi
     {briefmi, {ClientName, CMi, CZeit}} ->
-      log([atom_to_list(ClientName), " reports new Mi ", integer_to_list(CMi), " at ", vsutil:now2string(CZeit)]),
+      util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), atom_to_list(ClientName) ++ " reports new Mi " ++ integer_to_list(CMi) ++ " at " ++ vsutil:now2string(CZeit) ++ "\n"),
       UpdatedMinimumActVal = maps:update(smallestGgT, min(CMi, maps:get(smallestGgT, ActVal)), ActVal),
       calculation(UpdatedMinimumActVal);
   % ggT process is done
@@ -119,19 +113,19 @@ calculation(ActVal) ->
         CorrectFlag =:= true ->
           handle_briefterm(ActVal, CMi, From, CTermZeit);
         true ->
-          log([atom_to_list(ClientName), " reports termination with ggT ", CMi, " at ", vsutil:now2string(CTermZeit)])
+          util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), atom_to_list(ClientName) ++ " reports termination with ggT " ++ util:to_String(CMi) ++ " at " ++ vsutil:now2string(CTermZeit) ++ "\n")
       end,
       calculation(ActVal)
   end.
 
 set_neighbors(ClientsToPID, [Middle, Last], [First, Second | _Tail]) ->
-  log(["Set neighbour for ggT-process ", atom_to_list(Last), " with neighbours: ", atom_to_list(Middle), " ", atom_to_list(First)]),
+  util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Set neighbour for ggT-process " ++ atom_to_list(Last) ++ " with neighbours: " ++ atom_to_list(Middle) ++ " " ++ atom_to_list(First) ++ "\n"),
   maps:get(Last, ClientsToPID) ! {setneighbors, Middle, First},
-  log(["Set neighbour for ggT-process ", atom_to_list(First), " with neighbours: ", atom_to_list(Last), " ", atom_to_list(Second)]),
+  util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Set neighbour for ggT-process " ++ atom_to_list(First) ++ " with neighbours: " ++ atom_to_list(Last) ++ " " ++ atom_to_list(Second) ++ "\n"),
   maps:get(First, ClientsToPID) ! {setneighbors, Last, Second};
 
 set_neighbors(ClientsToPID, [Left, Middle, Right | Tail], Clients) ->
-  log(["Set neighbour for ggT-process ", atom_to_list(Middle), " with neighbours: ", atom_to_list(Left), " ", atom_to_list(Right)]),
+  util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Set neighbour for ggT-process " ++ atom_to_list(Middle) ++ " with neighbours: " ++ atom_to_list(Left) ++ " " ++ atom_to_list(Right) ++ "\n"),
   maps:get(Middle, ClientsToPID) ! {setneighbors, Left, Right},
   set_neighbors(ClientsToPID, [Middle, Right] ++ Tail, Clients).
 
@@ -139,19 +133,18 @@ bind_ggT(NameService, GgTName, ClientsToPID) ->
   NameService ! {self(), {lookup, GgTName}},
   receive
     not_found ->
-      log(["Could not bind ", atom_to_list(GgTName)]),
+      util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Could not bind " ++ atom_to_list(GgTName) ++ "\n"),
       maps:put(GgTName, undefined, ClientsToPID);
     {pin, GgTPID} ->
-      log(["Bound ggT-process ", atom_to_list(GgTName)]),
+      util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Bound ggT-process " ++ atom_to_list(GgTName) ++ "\n"),
       maps:put(GgTName, GgTPID, ClientsToPID)
   end.
 
 bind_ggTs(ActVal) ->
   Config = maps:get(config, ActVal),
   {ok, NSNode} = vsutil:get_config_value(nameservicenode, Config),
-  {ok, NSName} = vsutil:get_config_value(nameservicename, Config),
   pong = net_adm:ping(NSNode),
-  NameService = global:whereis_name(NSName),
+  NameService = global:whereis_name(nameservice),
   ClientsToPID = lists:foldr(fun(GgTName, Acc) ->
     bind_ggT(NameService, GgTName, Acc) end, maps:get(clientsToPID, ActVal), maps:get(clients, ActVal)),
   maps:update(clientsToPID, ClientsToPID, ActVal).
@@ -166,7 +159,7 @@ kill_clients([Client | Tail]) ->
   kill_clients(Tail).
 
 shutdown(ActVal) ->
-  log(["Shutting down ", integer_to_list(length(maps:get(clients, ActVal))), " ggT-processes"]),
+  util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Shutting down " ++ integer_to_list(length(maps:get(clients, ActVal))) ++ " ggT-processes\n"),
   kill_clients(maps:get(clients, ActVal)),
   exit(self(), normal), ok.
 
@@ -181,45 +174,46 @@ initial(ActVal) ->
       {ok, GGTProcessNumber} = vsutil:get_config_value(ggtprozessnummer, Config),
       Quota = max(2, round(length(maps:get(clients, ActVal)) * QuotaPercentage / 100)),
       From ! {steeringval, WorkingTime, TerminationTime, Quota, GGTProcessNumber},
-      log(["getsteeringval: ", pid_to_list(From)]),
+      util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "getsteeringval: " ++ pid_to_list(From) ++ "\n"),
       initial(ActVal);
     {hello, ClientName} ->
       NewActVal = maps:update(clients, maps:get(clients, ActVal) ++ [ClientName], ActVal),
-      log(["hello: ", atom_to_list(ClientName), " #ofclients: ", integer_to_list(length(maps:get(clients, NewActVal)))]),
+      util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "hello: " ++ atom_to_list(ClientName) ++ " #ofclients: " ++ integer_to_list(length(maps:get(clients, NewActVal))) ++ "\n"),
       initial(NewActVal);
     reset -> initial(maps:update(clients, [], ActVal));
     kill -> shutdown(ActVal);
     step -> Config = maps:get(config, ActVal),
       {ok, ExpectedClients} = vsutil:get_config_value(ggtprozessnummer, Config),
       ActualClients = length(maps:get(clients, ActVal)),
-      log(["Initial ActVal completed. Registered ", integer_to_list(ExpectedClients), "/", integer_to_list(ActualClients), " ggT-processes"]),
-      log(["Start building ring"]),
+      util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Initial ActVal completed. Registered " ++ integer_to_list(ExpectedClients) ++ "/" ++ integer_to_list(ActualClients) ++ " ggT-processes\n"),
+      util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Start building ring\n"),
       BoundClientsActVal = bind_ggTs(ActVal),
       % build ring
       ShuffledClients = util:shuffle(maps:get(clients, ActVal)),
       set_neighbors(maps:get(clientsToPID, BoundClientsActVal), ShuffledClients, ShuffledClients),
-      log(["Done building ring"]),
-      log(["Switching to calculation ActVal"]),
+      util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Done building ring\n"),
+      util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Switching to calculation ActVal\n"),
       calculation(BoundClientsActVal)
   end,
   ActVal.
 
 init_coordinator() ->
-  {ok, Config} = file:consult("./config/koordinator.cfg"),
-  log(["starttime: ", util:timeMilliSecond(), " | mit PID ", pid_to_list(self())]),
-  log(["koordinator.cfg geoeffnet..."]),
+  {ok, Config} = file:consult("koordinator.cfg"),
+  util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "starttime: " ++ util:timeMilliSecond() ++ " | mit PID " ++ pid_to_list(self()) ++ "\n"),
+  util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "koordinator.cfg geoeffnet...\n"),
   {ok, CoordName} = vsutil:get_config_value(koordinatorname, Config),
-  log(["koordinator.cfg gelesen..."]),
+  util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "koordinator.cfg gelesen...\n"),
   {ok, NSNode} = vsutil:get_config_value(nameservicenode, Config),
-  {ok, NSName} = vsutil:get_config_value(nameservicename, Config),
+%%  {match, [NSName]} = re:run(util:to_String(NSNode), "[a-z0-9]+", [{capture, first, list}]),
   pong = net_adm:ping(NSNode),
-  NameService = global:whereis_name(NSName),
-  log(["Nameservice ", pid_to_list(NameService), " gebunden..."]),
+  util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), pong),
+  NameService = global:whereis_name(nameservice),
+  util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Nameservice " ++ pid_to_list(NameService) ++ " gebunden...\n"),
   erlang:register(CoordName, self()),
-  log(["lokal registriert..."]),
+  util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "lokal registriert...\n"),
   NameService ! {self(), {rebind, CoordName, node()}},
   receive
-    ok -> log(["beim Namensdienst registriert."])
+    ok -> util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "beim Namensdienst registriert.\n")
   end,
   initial(#{config => Config, clients => [], clientsToPID => #{}, smallestGgT => 134217728}).
 

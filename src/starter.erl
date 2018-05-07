@@ -38,20 +38,19 @@ start_ggT_processes(NumberOfGgtProcesses, ParamMap, Fun, Result) ->
 
 %% Starts the starter with unique starterID
 start(StarterID) ->
-  {ok, Config} = file:consult("./config/ggt.cfg"),
+  {ok, Config} = file:consult("ggt.cfg"),
   NewConfig = lists:concat([Config, [{starterid, StarterID}]]),
 
   util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "Starttime: " ++ util:timeMilliSecond() ++ " with PID " ++ pid_to_list(self()) ++ "\n"),
-  util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "./config/ggt.cfg geöffnet...\n"),
+  util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "ggt.cfg geöffnet...\n"),
 
   {ok, GroupNumber} = vsutil:get_config_value(praktikumsgruppe, Config),
   {ok, TeamNumber} = vsutil:get_config_value(teamnummer, Config),
-  util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "./config/ggt.cfg geladen...\n"),
+  util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "ggt.cfg geladen...\n"),
 
   {ok, NSNode} = vsutil:get_config_value(nameservicenode, Config),
-  {ok, NSName} = vsutil:get_config_value(nameservicename, Config),
   pong = net_adm:ping(NSNode),
-  NameService = global:whereis_name(NSName),
+  NameService = global:whereis_name(nameservice),
   util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "Nameservice '" ++ pid_to_list(NameService) ++ "' bound...\n"),
 
   Coordinator = pingCoordinator(NameService, NewConfig),
