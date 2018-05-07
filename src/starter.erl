@@ -1,32 +1,27 @@
 -module(starter).
 
--export([start/1, log/2, discover_coordinator/2, get_steering_values/2, ggT_id/4, start_ggT_processes/4]).
+-export([start/1, pingCoordinator/2, get_steering_values/2, ggT_id/4, start_ggT_processes/4]).
 
-log(Config, Message) ->
-  {ok, StarterID} = vsutil:get_config_value(starterid, Config),
-  Logfile = list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"),
-  FullMessage = Message ++ ["\n"],
-  util:logging(Logfile, lists:concat(FullMessage)),
-  Logfile.
-
-discover_coordinator(NameService, Config) ->
+pingCoordinator(NameService, Config) ->
   {ok, CoordinatorName} = vsutil:get_config_value(koordinatorname, Config),
   NameService ! {self(), {lookup, CoordinatorName}},
+  {ok, StarterID} = vsutil:get_config_value(starterid, Config),
   receive
     not_found ->
-      log(Config, ["service ", atom_to_list(CoordinatorName), " not found..."]),
+      util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "service " ++ atom_to_list(CoordinatorName) ++ " not found...\n"),
       {};
     {pin, {Name, Node}} ->
       pong = net_adm:ping(Node),
-      log(Config, ["coordinator service ", atom_to_list(Name), "(", atom_to_list(Node), ")", " bound..."]),
+      util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "coordinator service " ++ atom_to_list(Name) ++ "(" ++ atom_to_list(Node) ++ ") bound...\n"),
       {Name, Node}
   end.
   
 get_steering_values(Coordinator, Config) ->
   Coordinator ! {self(), getsteeringval},
+  {ok, StarterID} = vsutil:get_config_value(koordinatorname, Config),
   receive
     {steeringval, ArbeitsZeit, TermZeit, Quota, GGTProzessnummer} ->
-      log(Config, ["getsteeringval: ", integer_to_list(ArbeitsZeit), " work time; ", integer_to_list(TermZeit), " term time; ", integer_to_list(Quota), " quota; ", integer_to_list(GGTProzessnummer), " #ggT proccesses."]),
+      util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "getsteeringval: " ++ integer_to_list(ArbeitsZeit) ++ " work time; " ++ integer_to_list(TermZeit) ++ " term time; " ++ integer_to_list(Quota) ++ " quota; " ++ integer_to_list(GGTProzessnummer) ++ " #ggT proccesses."),
       [ArbeitsZeit, TermZeit, Quota, GGTProzessnummer]
   end.
 
@@ -59,7 +54,7 @@ start(StarterID) ->
   NameService = global:whereis_name(NSName),
   util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "Nameservice '" ++ pid_to_list(NameService) ++ "' bound...\n"),
 
-  Coordinator = discover_coordinator(NameService, NewConfig),
+  Coordinator = pingCoordinator(NameService, NewConfig),
   [ArbeitsZeit, TermZeit, Quota, NumberOfGgtProcesses] = get_steering_values(Coordinator, NewConfig),
   ParamMap = #{worktime => ArbeitsZeit, termtime => TermZeit, starterid => StarterID, groupnumber => GroupNumber, teamnumber => TeamNumber, nameservice => NameService, coordinator => Coordinator, quota => Quota},
   start_ggT_processes(NumberOfGgtProcesses, ParamMap, fun ggt:start/6, []).

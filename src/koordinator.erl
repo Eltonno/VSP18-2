@@ -12,12 +12,12 @@ maybe_log_wrong_term(CmiReceived, MinimumCmi) when CmiReceived > MinimumCmi ->
 maybe_log_wrong_term(_CmiReceived, _MinimumCmi) when true ->
   ok.
 
-handle_briefterm(State, CMi, ClientName, CZeit) ->
-  Minimum = maps:get(smallestGgT, State),
+handle_briefterm(ActVal, CMi, ClientName, CZeit) ->
+  Minimum = maps:get(smallestGgT, ActVal),
   if
     CMi > Minimum ->
       log(["Trying to correct with sending ", integer_to_list(Minimum), " to ", atom_to_list(ClientName), " at ", vsutil:now2string(CZeit)]),
-      maps:get(ClientName, maps:get(clientsToPID, State)) ! {sendy, Minimum};
+      maps:get(ClientName, maps:get(clientsToPID, ActVal)) ! {sendy, Minimum};
     true ->
       log([atom_to_list(ClientName), " reports correct termination with ggT ", CMi, " at ", vsutil:now2string(CZeit)])
   end.
@@ -81,47 +81,47 @@ start_calculation(WggT, Clients, ClientsToPID) ->
   StartYs = vsutil:bestimme_mis(WggT, length(StartingClients)),
   send_ys_to_ggTs(StartYs, StartingClients, ClientsToPID).
 
-calculation(State) ->
+calculation(ActVal) ->
   receive
   % Starts the calculation
     {calc, WggT} ->
-      start_calculation(WggT, maps:get(clients, State), maps:get(clientsToPID, State)),
-      calculation(State);
+      start_calculation(WggT, maps:get(clients, ActVal), maps:get(clientsToPID, ActVal)),
+      calculation(ActVal);
   % Toggles the correct flag
     toggle ->
-      Config = maps:get(config, State),
+      Config = maps:get(config, ActVal),
       {ok, CorrectFlag} = vsutil:get_config_value(korrigieren, Config),
       NewFlag = (CorrectFlag + 1) rem 2,
-      UpdatedState = maps:update(config, lists:keyreplace(korrigieren, 1, Config, {korrigieren, NewFlag}), State),
+      UpdatedActVal = maps:update(config, lists:keyreplace(korrigieren, 1, Config, {korrigieren, NewFlag}), ActVal),
       log(["Correct flag is now set to: ", NewFlag, " from: ", CorrectFlag]),
-      calculation(UpdatedState);
+      calculation(UpdatedActVal);
   % Ask all ggTs current Mi
     prompt ->
-      prompt_all_ggt(maps:get(clientsToPID, State), maps:get(clients, State)),
-      calculation(State);
+      prompt_all_ggt(maps:get(clientsToPID, ActVal), maps:get(clients, ActVal)),
+      calculation(ActVal);
   % Pings all ggTs
     nudge ->
-      check_status_all_ggt(maps:get(clientsToPID, State), maps:get(clients, State)),
-      calculation(State);
+      check_status_all_ggt(maps:get(clientsToPID, ActVal), maps:get(clients, ActVal)),
+      calculation(ActVal);
     kill ->
-      shutdown(State);
+      shutdown(ActVal);
   % ggT process signals its mi
     {briefmi, {ClientName, CMi, CZeit}} ->
       log([atom_to_list(ClientName), " reports new Mi ", integer_to_list(CMi), " at ", vsutil:now2string(CZeit)]),
-      UpdatedMinimumState = maps:update(smallestGgT, min(CMi, maps:get(smallestGgT, State)), State),
-      calculation(UpdatedMinimumState);
+      UpdatedMinimumActVal = maps:update(smallestGgT, min(CMi, maps:get(smallestGgT, ActVal)), ActVal),
+      calculation(UpdatedMinimumActVal);
   % ggT process is done
     {From, briefterm, {ClientName, CMi, CTermZeit}} ->
-      Config = maps:get(config, State),
+      Config = maps:get(config, ActVal),
       {ok, CorrectFlag} = vsutil:get_config_value(korrigieren, Config),
-      maybe_log_wrong_term(CMi, maps:get(smallestGgT, State)),
+      maybe_log_wrong_term(CMi, maps:get(smallestGgT, ActVal)),
       if
         CorrectFlag =:= true ->
-          handle_briefterm(State, CMi, From, CTermZeit);
+          handle_briefterm(ActVal, CMi, From, CTermZeit);
         true ->
           log([atom_to_list(ClientName), " reports termination with ggT ", CMi, " at ", vsutil:now2string(CTermZeit)])
       end,
-      calculation(State)
+      calculation(ActVal)
   end.
 
 set_neighbors(ClientsToPID, [Middle, Last], [First, Second | _Tail]) ->
@@ -146,15 +146,15 @@ bind_ggT(NameService, GgTName, ClientsToPID) ->
       maps:put(GgTName, GgTPID, ClientsToPID)
   end.
 
-bind_ggTs(State) ->
-  Config = maps:get(config, State),
+bind_ggTs(ActVal) ->
+  Config = maps:get(config, ActVal),
   {ok, NSNode} = vsutil:get_config_value(nameservicenode, Config),
   {ok, NSName} = vsutil:get_config_value(nameservicename, Config),
   pong = net_adm:ping(NSNode),
   NameService = global:whereis_name(NSName),
   ClientsToPID = lists:foldr(fun(GgTName, Acc) ->
-    bind_ggT(NameService, GgTName, Acc) end, maps:get(clientsToPID, State), maps:get(clients, State)),
-  maps:update(clientsToPID, ClientsToPID, State).
+    bind_ggT(NameService, GgTName, Acc) end, maps:get(clientsToPID, ActVal), maps:get(clients, ActVal)),
+  maps:update(clientsToPID, ClientsToPID, ActVal).
 
 kill_clients([]) -> exit(self(), normal), ok;
 kill_clients([Client | Tail]) ->
@@ -165,44 +165,44 @@ kill_clients([Client | Tail]) ->
   end,
   kill_clients(Tail).
 
-shutdown(State) ->
-  log(["Shutting down ", integer_to_list(length(maps:get(clients, State))), " ggT-processes"]),
-  kill_clients(maps:get(clients, State)),
+shutdown(ActVal) ->
+  log(["Shutting down ", integer_to_list(length(maps:get(clients, ActVal))), " ggT-processes"]),
+  kill_clients(maps:get(clients, ActVal)),
   exit(self(), normal), ok.
 
 -spec initial(map()) -> map().
-initial(State) ->
+initial(ActVal) ->
   receive
     {From, getsteeringval} ->
-      Config = maps:get(config, State),
+      Config = maps:get(config, ActVal),
       {ok, WorkingTime} = vsutil:get_config_value(arbeitszeit, Config),
       {ok, TerminationTime} = vsutil:get_config_value(termzeit, Config),
       {ok, QuotaPercentage} = vsutil:get_config_value(quote, Config),
       {ok, GGTProcessNumber} = vsutil:get_config_value(ggtprozessnummer, Config),
-      Quota = max(2, round(length(maps:get(clients, State)) * QuotaPercentage / 100)),
+      Quota = max(2, round(length(maps:get(clients, ActVal)) * QuotaPercentage / 100)),
       From ! {steeringval, WorkingTime, TerminationTime, Quota, GGTProcessNumber},
       log(["getsteeringval: ", pid_to_list(From)]),
-      initial(State);
+      initial(ActVal);
     {hello, ClientName} ->
-      NewState = maps:update(clients, maps:get(clients, State) ++ [ClientName], State),
-      log(["hello: ", atom_to_list(ClientName), " #ofclients: ", integer_to_list(length(maps:get(clients, NewState)))]),
-      initial(NewState);
-    reset -> initial(maps:update(clients, [], State));
-    kill -> shutdown(State);
-    step -> Config = maps:get(config, State),
+      NewActVal = maps:update(clients, maps:get(clients, ActVal) ++ [ClientName], ActVal),
+      log(["hello: ", atom_to_list(ClientName), " #ofclients: ", integer_to_list(length(maps:get(clients, NewActVal)))]),
+      initial(NewActVal);
+    reset -> initial(maps:update(clients, [], ActVal));
+    kill -> shutdown(ActVal);
+    step -> Config = maps:get(config, ActVal),
       {ok, ExpectedClients} = vsutil:get_config_value(ggtprozessnummer, Config),
-      ActualClients = length(maps:get(clients, State)),
-      log(["Initial state completed. Registered ", integer_to_list(ExpectedClients), "/", integer_to_list(ActualClients), " ggT-processes"]),
+      ActualClients = length(maps:get(clients, ActVal)),
+      log(["Initial ActVal completed. Registered ", integer_to_list(ExpectedClients), "/", integer_to_list(ActualClients), " ggT-processes"]),
       log(["Start building ring"]),
-      BoundClientsState = bind_ggTs(State),
+      BoundClientsActVal = bind_ggTs(ActVal),
       % build ring
-      ShuffledClients = util:shuffle(maps:get(clients, State)),
-      set_neighbors(maps:get(clientsToPID, BoundClientsState), ShuffledClients, ShuffledClients),
+      ShuffledClients = util:shuffle(maps:get(clients, ActVal)),
+      set_neighbors(maps:get(clientsToPID, BoundClientsActVal), ShuffledClients, ShuffledClients),
       log(["Done building ring"]),
-      log(["Switching to calculation state"]),
-      calculation(BoundClientsState)
+      log(["Switching to calculation ActVal"]),
+      calculation(BoundClientsActVal)
   end,
-  State.
+  ActVal.
 
 init_coordinator() ->
   {ok, Config} = file:consult("./config/koordinator.cfg"),
