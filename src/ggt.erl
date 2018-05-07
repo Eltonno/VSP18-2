@@ -1,9 +1,3 @@
-%%%-------------------------------------------------------------------
-%%% @doc
-%%% Handles all ggT related calculations of the algorithm.
-%%% For more infos have a look at the documentation section 3.2
-%%% @end
-%%%-------------------------------------------------------------------
 -module(ggt).
 -export([start/6, start_ggt_process/1, reset_terminate_timer/1, maybe_update_mi/2, update_neighbours/3, set_pm/2, term_request/1, voting_response/2, maybe_send_brief_term/2]).
 
@@ -12,13 +6,13 @@ log(Config, Message) ->
   GgTName = maps:get(ggtname, Config),
   Logfile = list_to_atom(lists:concat(["GGTP_", atom_to_list(GgTName), "@", atom_to_list(node()), ".log"])),
   FullMessage = Message ++ ["\n"],
-  werkzeug:logging(Logfile, lists:concat(FullMessage)),
+  util:logging(Logfile, lists:concat(FullMessage)),
   Logfile.
 
 start_ggt_process(State) ->
   GgTName = maps:get(ggtname, State),
   Coordinator = maps:get(coordinator, State),
-  log(State, [atom_to_list(GgTName), " starttime: ", werkzeug:timeMilliSecond(), " with PID ", pid_to_list(self()), " on ", atom_to_list(node())]),
+  log(State, [atom_to_list(GgTName), " starttime: ", util:timeMilliSecond(), " with PID ", pid_to_list(self()), " on ", atom_to_list(node())]),
   register(GgTName, self()),
   log(State, ["registered locally"]),
   maps:get(nameservice, State) ! {self(), {rebind, GgTName, node()}},
@@ -78,7 +72,7 @@ maybe_update_mi(Y, State) ->
       L ! {sendy, NewMi},
       R ! {sendy, NewMi},
       Coordinator ! {briefmi, {GgTName, NewMi, erlang:now()}},
-      log(State, ["sendy: ", integer_to_list(Y), " (", integer_to_list(Mi), "); new mi: ", integer_to_list(NewMi), " ", werkzeug:timeMilliSecond()]),
+      log(State, ["sendy: ", integer_to_list(Y), " (", integer_to_list(Mi), "); new mi: ", integer_to_list(NewMi), " ", util:timeMilliSecond()]),
       maps:update(mi, NewMi, reset_terminate_timer(State));
     true ->
       log(State, ["sendy: ", integer_to_list(Y), " (", integer_to_list(Mi), "); no new mi"]),
@@ -91,7 +85,7 @@ term_request(State) ->
     IsTerminating ->
       ok;
     true ->
-      log(State, ["Start termination voting ", werkzeug:timeMilliSecond()]),
+      log(State, ["Start termination voting ", util:timeMilliSecond()]),
       maps:get(nameservice, State) ! {self(), {multicast, vote, maps:get(ggtname, State)}}
   end.
 
@@ -127,7 +121,7 @@ maybe_send_brief_term(GgTName, State) ->
   CurrentVotes = maps:get(yesVotes, State),
   Quota = maps:get(quota, State),
   NewVotes = CurrentVotes + 1,
-  log(State, ["received yes vote from ", atom_to_list(GgTName), " with a total votes of ", integer_to_list(NewVotes), " ", werkzeug:timeMilliSecond()]),
+  log(State, ["received yes vote from ", atom_to_list(GgTName), " with a total votes of ", integer_to_list(NewVotes), " ", util:timeMilliSecond()]),
   NewState = maps:update(yesVotes, NewVotes, State),
   if
     NewVotes == Quota ->

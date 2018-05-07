@@ -1,24 +1,16 @@
-%%%-------------------------------------------------------------------
-%%% @doc
-%%% Starts ggT-Processes with configurations from the coordinator and
-%%% its own config file.
-%%%
-%%% For a more detailed view see documentation section 3.1
-%%% @end
-%%%-------------------------------------------------------------------
 -module(starter).
 
 -export([start/1, log/2, discover_coordinator/2, get_steering_values/2, ggT_id/4, start_ggT_processes/4]).
 
 log(Config, Message) ->
-  {ok, StarterID} = werkzeug:get_config_value(starterid, Config),
+  {ok, StarterID} = vsutil:get_config_value(starterid, Config),
   Logfile = list_to_atom(lists:concat(["ggt", integer_to_list(StarterID), "@", atom_to_list(node()), ".log"])),
   FullMessage = Message ++ ["\n"],
-  werkzeug:logging(Logfile, lists:concat(FullMessage)),
+  util:logging(Logfile, lists:concat(FullMessage)),
   Logfile.
 
 discover_coordinator(NameService, Config) ->
-  {ok, CoordinatorName} = werkzeug:get_config_value(koordinatorname, Config),
+  {ok, CoordinatorName} = vsutil:get_config_value(koordinatorname, Config),
   NameService ! {self(), {lookup, CoordinatorName}},
   receive
     not_found ->
@@ -29,7 +21,7 @@ discover_coordinator(NameService, Config) ->
       log(Config, ["coordinator service ", atom_to_list(Name), "(", atom_to_list(Node), ")", " bound..."]),
       {Name, Node}
   end.
-
+  
 get_steering_values(Coordinator, Config) ->
   Coordinator ! {self(), getsteeringval},
   receive
@@ -52,16 +44,19 @@ start_ggT_processes(NumberOfGgtProcesses, ParamMap, Fun, Result) ->
 %% Starts the starter with unique starterID
 start(StarterID) -> start(StarterID, "./config/ggt.cfg").
 start(StarterID, ConfigPath) ->
-  Config = werkzeug:loadConfig(ConfigPath),
+  {ok, Config} = file:consult(ConfigPath),
   NewConfig = lists:concat([Config, [{starterid, StarterID}]]),
-  log(NewConfig, ["Starttime: ", werkzeug:timeMilliSecond(), " with PID ", pid_to_list(self())]),
+  log(NewConfig, ["Starttime: ", util:timeMilliSecond(), " with PID ", pid_to_list(self())]),
   log(NewConfig, [ConfigPath, " opened..."]),
 
-  {ok, GroupNumber} = werkzeug:get_config_value(praktikumsgruppe, Config),
-  {ok, TeamNumber} = werkzeug:get_config_value(teamnummer, Config),
+  {ok, GroupNumber} = vsutil:get_config_value(praktikumsgruppe, Config),
+  {ok, TeamNumber} = vsutil:get_config_value(teamnummer, Config),
   log(NewConfig, [ConfigPath, " loaded..."]),
 
-  NameService = utils:bind_nameservice(NewConfig),
+  {ok, NSNode} = vsutil:get_config_value(nameservicenode, Config),
+  {ok, NSName} = vsutil:get_config_value(nameservicename, Config),
+  pong = net_adm:ping(NSNode),
+  NameService = global:whereis_name(NSName),
   log(NewConfig, ["Nameservice '", pid_to_list(NameService), "' bound..."]),
 
   Coordinator = discover_coordinator(NameService, NewConfig),
