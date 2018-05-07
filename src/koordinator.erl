@@ -51,8 +51,21 @@ send_ys_to_ggTs([Mi | Tail], [Client | ClientTail], ClientsToPID) ->
   send_ys_to_ggTs(Tail, ClientTail, ClientsToPID).
 
 twenty_percent_of(Clients) ->
-  EightyPercent = ceiling(length(Clients) * 0.8),
-  lists:nthtail(EightyPercent, util:shuffle(Clients)).
+  EightyPercent = rounding(length(Clients) * 0.8),
+  Length = length(lists:nthtail(EightyPercent, Clients)),
+  if
+    Length >= 2 -> lists:nthtail(EightyPercent, util:shuffle(Clients));
+    true -> lists:nthtail(length(Clients)-2, util:shuffle(Clients))
+  end.
+
+rounding(X) when X < 0 ->
+  trunc(X);
+rounding(X) ->
+  T = trunc(X),
+  case X - T == 0 of
+    true -> T;
+    false -> T + 1
+  end.
 
 set_initial_mis([], [], _ClientsToPID) -> ok;
 set_initial_mis([Mi | Tail], [Client | ClientTail], ClientsToPID) ->
@@ -212,12 +225,3 @@ init_coordinator() ->
 
 start() ->
   spawn(?MODULE, init_coordinator, []).
-
-ceiling(X) when X < 2 ->
-  2;
-ceiling(X) ->
-  T = trunc(X),
-  case X - T == 0 of
-    true -> T;
-    false -> T + 1
-  end.

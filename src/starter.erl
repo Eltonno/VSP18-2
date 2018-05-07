@@ -4,7 +4,7 @@
 
 log(Config, Message) ->
   {ok, StarterID} = vsutil:get_config_value(starterid, Config),
-  Logfile = list_to_atom(lists:concat(["ggt", integer_to_list(StarterID), "@", atom_to_list(node()), ".log"])),
+  Logfile = list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"),
   FullMessage = Message ++ ["\n"],
   util:logging(Logfile, lists:concat(FullMessage)),
   Logfile.
@@ -42,22 +42,22 @@ start_ggT_processes(NumberOfGgtProcesses, ParamMap, Fun, Result) ->
   start_ggT_processes(NumberOfGgtProcesses - 1, ParamMap, Fun, NewResult).
 
 %% Starts the starter with unique starterID
-start(StarterID) -> start(StarterID, "./config/ggt.cfg").
-start(StarterID, ConfigPath) ->
-  {ok, Config} = file:consult(ConfigPath),
+start(StarterID) ->
+  {ok, Config} = file:consult("./config/ggt.cfg"),
   NewConfig = lists:concat([Config, [{starterid, StarterID}]]),
-  log(NewConfig, ["Starttime: ", util:timeMilliSecond(), " with PID ", pid_to_list(self())]),
-  log(NewConfig, [ConfigPath, " opened..."]),
+
+  util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "Starttime: " ++ util:timeMilliSecond() ++ " with PID " ++ pid_to_list(self()) ++ "\n"),
+  util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "./config/ggt.cfg geöffnet...\n"),
 
   {ok, GroupNumber} = vsutil:get_config_value(praktikumsgruppe, Config),
   {ok, TeamNumber} = vsutil:get_config_value(teamnummer, Config),
-  log(NewConfig, [ConfigPath, " loaded..."]),
+  util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "./config/ggt.cfg geladen...\n"),
 
   {ok, NSNode} = vsutil:get_config_value(nameservicenode, Config),
   {ok, NSName} = vsutil:get_config_value(nameservicename, Config),
   pong = net_adm:ping(NSNode),
   NameService = global:whereis_name(NSName),
-  log(NewConfig, ["Nameservice '", pid_to_list(NameService), "' bound..."]),
+  util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "Nameservice '" ++ pid_to_list(NameService) ++ "' bound...\n"),
 
   Coordinator = discover_coordinator(NameService, NewConfig),
   [ArbeitsZeit, TermZeit, Quota, NumberOfGgtProcesses] = get_steering_values(Coordinator, NewConfig),
