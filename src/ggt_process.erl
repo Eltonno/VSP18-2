@@ -1,4 +1,4 @@
--module(ggt).
+-module(ggt_process).
 -export([start/6, start_ggt_process/1, reset_terminate_timer/1, maybe_update_mi/2, update_neighbours/4, set_pm/3, term_request/2, voting_response/2, maybe_send_brief_term/2]).
 
 start_ggt_process(ActVal) ->

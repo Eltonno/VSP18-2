@@ -1,11 +1,10 @@
 -module(starter).
 
--export([go/2, start/1, pingCoordinator/2, get_steering_values/2, ggT_id/4, start_ggT_processes/4]).
+-export([go/2, start/1, pingCoordinator/3, get_steering_values/2, ggT_id/4, start_ggT_processes/4]).
 
-pingCoordinator(NameService, Config) ->
+pingCoordinator(NameService, Config, StarterID) ->
   {ok, CoordinatorName} = vsutil:get_config_value(koordinatorname, Config),
   NameService ! {self(), {lookup, CoordinatorName}},
-  {ok, StarterID} = vsutil:get_config_value(starterid, Config),
   receive
     not_found ->
       util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "service " ++ atom_to_list(CoordinatorName) ++ " not found...\n"),
@@ -16,9 +15,8 @@ pingCoordinator(NameService, Config) ->
       {Name, Node}
   end.
 
-get_steering_values(Coordinator, Config) ->
+get_steering_values(Coordinator, StarterID) ->
   Coordinator ! {self(), getsteeringval},
-  {ok, StarterID} = vsutil:get_config_value(starterid, Config),
   receive
     {steeringval, ArbeitsZeit, TermZeit, Quota, GGTProzessnummer} ->
       util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "getsteeringval: " ++ integer_to_list(ArbeitsZeit) ++ " work time; " ++ integer_to_list(TermZeit) ++ " term time; " ++ integer_to_list(Quota) ++ " quota; " ++ integer_to_list(GGTProzessnummer) ++ " #ggT proccesses."),
@@ -39,7 +37,6 @@ start_ggT_processes(NumberOfGgtProcesses, ParamMap, Fun, Result) ->
 %% Starts the starter with unique starterID
 start(StarterID) ->
   {ok, Config} = file:consult("ggt.cfg"),
-  NewConfig = lists:concat([Config, [{starterid, StarterID}]]),
 
   util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "Starttime: " ++ util:timeMilliSecond() ++ " with PID " ++ pid_to_list(self()) ++ "\n"),
   util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "ggt.cfg geöffnet...\n"),
@@ -53,10 +50,10 @@ start(StarterID) ->
   NameService = global:whereis_name(nameservice),
   util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "Nameservice '" ++ pid_to_list(NameService) ++ "' bound...\n"),
 
-  Coordinator = pingCoordinator(NameService, NewConfig),
-  [ArbeitsZeit, TermZeit, Quota, NumberOfGgtProcesses] = get_steering_values(Coordinator, Config),
+  Coordinator = pingCoordinator(NameService, Config, StarterID),
+  [ArbeitsZeit, TermZeit, Quota, NumberOfGgtProcesses] = get_steering_values(Coordinator, StarterID),
   ParamMap = #{worktime => ArbeitsZeit, termtime => TermZeit, starterid => StarterID, groupnumber => GroupNumber, teamnumber => TeamNumber, nameservice => NameService, coordinator => Coordinator, quota => Quota},
-  start_ggT_processes(NumberOfGgtProcesses, ParamMap, fun ggt:start/6, []).
+  start_ggT_processes(NumberOfGgtProcesses, ParamMap, fun ggt_process:start/6, []).
 
 -spec go(integer(), integer()) -> any().
 go(0, _) ->
