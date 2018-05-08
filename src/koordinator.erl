@@ -206,7 +206,6 @@ init_coordinator() ->
   {ok, NSNode} = vsutil:get_config_value(nameservicenode, Config),
 %%  {match, [NSName]} = re:run(util:to_String(NSNode), "[a-z0-9]+", [{capture, first, list}]),
   pong = net_adm:ping(NSNode),
-  util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), pong),
   NameService = global:whereis_name(nameservice),
   util:logging(list_to_atom("Koordinator@" ++ atom_to_list(node()) ++ ".log"), "Nameservice " ++ pid_to_list(NameService) ++ " gebunden...\n"),
   erlang:register(CoordName, self()),
