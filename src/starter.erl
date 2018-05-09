@@ -47,13 +47,14 @@ start(StarterID) ->
 
   {ok, NSNode} = vsutil:get_config_value(nameservicenode, Config),
   pong = net_adm:ping(NSNode),
+  ct:sleep(2000),
   NameService = global:whereis_name(nameservice),
   util:logging(list_to_atom("ggt" ++ integer_to_list(StarterID) ++  "@" ++ atom_to_list(node()) ++ ".log"), "Nameservice '" ++ pid_to_list(NameService) ++ "' bound...\n"),
 
   Coordinator = pingCoordinator(NameService, Config, StarterID),
   [ArbeitsZeit, TermZeit, Quota, NumberOfGgtProcesses] = get_steering_values(Coordinator, StarterID),
   ParamMap = #{worktime => ArbeitsZeit, termtime => TermZeit, starterid => StarterID, groupnumber => GroupNumber, teamnumber => TeamNumber, nameservice => NameService, coordinator => Coordinator, quota => Quota},
-  start_ggT_processes(NumberOfGgtProcesses, ParamMap, fun ggt_process:start/6, []).
+  start_ggT_processes(NumberOfGgtProcesses, ParamMap, fun ggt_process:start/9, []).
 
 -spec go(integer(), integer()) -> any().
 go(0, _) ->
