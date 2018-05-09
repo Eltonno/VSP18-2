@@ -141,7 +141,7 @@ messages(ActVal) ->
 end;
     {voteYes,Name} ->
       VActVal = lists:keystore(votes, 1, ActVal, {votes, Votes+1}),
-      %Wenn diese angenommen wurde, weil die Quote erreicht wurde, sendet er dem Koordinator eine Mitteilung über die Terminierung der aktuellen Berechnung,
+      % Wenn diese angenommen wurde, weil die Quote erreicht wurde, sendet er dem Koordinator eine Mitteilung über die Terminierung der aktuellen Berechnung,
       %die seinen Namen, den errechneten ggT (sein aktuelles Mi) und seine aktuelle Systemzeit beinhaltet.
       if
         (Votes + 1) == Quota ->
