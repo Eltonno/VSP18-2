@@ -53,7 +53,9 @@ messages(ActVal) ->
   receive
     {setneighbors,LeftN,RightN} ->
       LActVal = lists:keystore(leftn, 1, ActVal, {leftn, LeftN}),
+      util:logging("GGTP_" ++ atom_to_list(GGTName) ++ "@" ++ atom_to_list(node()) ++ ".log", util:to_String(GGTName) ++ " RightN: " ++ atom_to_list(LActVal) ++ "\n"),
       RLActVal = lists:keystore(rightn, 1, LActVal, {rightn, RightN}),
+      util:logging("GGTP_" ++ atom_to_list(GGTName) ++ "@" ++ atom_to_list(node()) ++ ".log", util:to_String(GGTName) ++ " RightN: " ++ atom_to_list(RLActVal) ++ "\n"),
       messages(RLActVal);
     {setpm, MiNeu} ->
       {ok, cancel} = timer:cancel(TRef),
@@ -64,6 +66,8 @@ messages(ActVal) ->
       messages(LastTMActVal);
     {sendy, Y} ->
       util:logging("GGTP_" ++ atom_to_list(GGTName) ++ "@" ++ atom_to_list(node()) ++ ".log", "setpm: " ++ integer_to_list(Y) ++ "\n"),
+      util:logging("GGTP_" ++ atom_to_list(GGTName) ++ "@" ++ atom_to_list(node()) ++ ".log", util:to_String(GGTName) ++ " LeftN: " ++ atom_to_list(LeftN) ++ "\n"),
+      util:logging("GGTP_" ++ atom_to_list(GGTName) ++ "@" ++ atom_to_list(node()) ++ ".log", util:to_String(GGTName) ++ " RightN: " ++ atom_to_list(RightN) ++ "\n"),
       if
         Y < Mi ->
           {ok, cancel} = timer:cancel(TRef),
@@ -71,12 +75,12 @@ messages(ActVal) ->
           MActVal = lists:keystore(mi, 1, ActVal, {mi, NewMi}),
           NameService ! {self(),{lookup, LeftN}},
           receive
-            not_found -> error;
+            not_found -> util:logging("GGTP_" ++ atom_to_list(GGTName) ++ "@" ++ atom_to_list(node()) ++ ".log", util:to_String(GGTName) ++ " LeftN not found\n");
             {pin, LeftNPID} -> LeftNPID ! {sendy, NewMi}
-          end ,
+          end,
           NameService ! {self(),{lookup, RightN}},
           receive
-            not_found -> error;
+            not_found -> util:logging("GGTP_" ++ atom_to_list(GGTName) ++ "@" ++ atom_to_list(node()) ++ ".log", util:to_String(GGTName) ++ " RightN not found\n");
             {pin, RightNPID} -> RightNPID ! {sendy, NewMi}
           end,
           timer:sleep(ArbeitsZeit),
@@ -84,9 +88,11 @@ messages(ActVal) ->
           {ok, CTRef} = timer:apply_after(TermZeit,?MODULE,term_request, [MActVal]),
           TMActVal = lists:keystore(tref, 1, MActVal, {tref, CTRef}),
           LastTMActVal = lists:keystore(letztenachricht, 1, TMActVal, {letztenachricht, vsutil:getUTC()}),
-          util:logging("GGTP_" ++ atom_to_list(GGTName) ++ "@" ++ atom_to_list(node()) ++ ".log", "ggt-" ++ util:to_String(GGTName) ++ "hat sich am Koordinator angemeldet\n"),
+          util:logging("GGTP_" ++ atom_to_list(GGTName) ++ "@" ++ atom_to_list(node()) ++ ".log", util:to_String(GGTName) ++ "hat sein Mi upgedatet zu: " ++ integer_to_list(NewMi) ++ "\n"),
           messages(LastTMActVal);
-        true -> messages(ActVal)
+        true ->
+          util:logging("GGTP_" ++ atom_to_list(GGTName) ++ "@" ++ atom_to_list(node()) ++ ".log", "Keine Änderung am Mi\n"),
+          messages(ActVal)
       end;
     {From,{vote,Initiator}} ->
       CTime = vsutil:getUTC(),
