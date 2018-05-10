@@ -27,28 +27,28 @@ start() ->
   util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", util:to_String(NameService)),
   NameService ! {self() ,{rebind, Koordinatorname, node()}},
   receive
-    ok -> ok
-  end,
-
-  State = [{arbeitszeit, ArbeitsZeit},
-    {termzeit, TermZeit},
-    {ggtprozessnummer, GGTProzessnummer},
-    {nameservicenode, NameServiceNode},
-    {koordinatorname, Koordinatorname},
-    {quote, Quote},
-    {korrigieren, Korrigieren},
-    %Der Koordinator hat eine Liste der bei ihm registrierten ggt-Prozesse,
-    {ggts, []},
-    {nameservice, NameService},
-    %und eine Variable, in der die kleinste von den ggt-Prozessen empfangene Zahl gespeichert wird.
-    {minmi, undefined}],
-  %Anfangs ist der Koordinator im Zustand “initial”.
-  spawn(?MODULE, initial, [State]).
+    ok ->  	State = [{arbeitszeit, ArbeitsZeit},
+      {termzeit, TermZeit},
+      {ggtprozessnummer, GGTProzessnummer},
+      {nameservicenode, NameServiceNode},
+      {koordinatorname, Koordinatorname},
+      {quote, Quote},
+      {korrigieren, Korrigieren},
+      %Der Koordinator hat eine Liste der bei ihm registrierten ggt-Prozesse,
+      {ggts, []},
+      {nameservice, NameService},
+      %und eine Variable, in der die kleinste von den ggt-Prozessen empfangene Zahl gespeichert wird.
+      {minmi, undefined}]	,
+      %Anfangs ist der Koordinator im Zustand “initial”.
+      spawn(?MODULE, initial, [State])
+  end.
 
 %initial
 initial(State) ->
-%%  util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "befor receive, while initial\n"),
+  util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "befor receive, while initial\n"),
   receive
+    {log, StarterPID} -> util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "util:to_String(NameService)\n"),
+      StarterPID ! ok;
     %Hier sendet er dem Starter, wenn von dem Starter angefragt,
   % die ggtprozessnummer, arbeitszeit, termzeit, und ggt- prozessnummer * 0.<quote>
     {From, getsteeringval} ->
@@ -85,11 +85,13 @@ initial(State) ->
 
 %bereit
 bereit(State) ->
+  util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "befor receive, while initial\n"),
   {ggts, GGTs} = lists:keyfind(ggts, 1, State),
   {korrigieren, Korrigieren} = lists:keyfind(korrigieren, 1, State),
   {nameservice, NameService} = lists:keyfind(nameservice, 1, State),
   {koordinatorname, Koordinatorname} = lists:keyfind(koordinatorname, 1, State),
   {minmi, MinMi} = lists:keyfind(minmi, 1, State),
+  util:logging("tester.log", "bereit\n"),
   receive
     reset ->
       %Beendet alle ggt-Prozesse (kill), leert die ggt-Prozessliste und setzt den Zustand auf initial.
@@ -174,6 +176,7 @@ bereit(State) ->
   end.
 
 ringbildung([GGT | Tail], State, GGTf) ->
+  util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "befor receive, while initial\n"),
   {nameservice, NameService} = lists:keyfind(nameservice, 1, State),
   NameService ! {self(),{lookup, list_to_atom(GGT)}},
   receive
@@ -196,6 +199,7 @@ ringbildung([GGT | Tail], State, GGTf) ->
 prompt_ggts([], _) -> ok;
 %Iteriert durch die ggt-Liste und erfragt bei jedem ggt seine aktuelle Mi (per “tellmi”) und loggt diese.
 prompt_ggts([ GGT | Tail ], State) ->
+  util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "befor receive, while initial\n"),
   {nameservice, NameService} = lists:keyfind(nameservice, 1, State),
   NameService ! {self(),{lookup, list_to_atom(GGT)}},
   receive
@@ -212,9 +216,10 @@ prompt_ggts([ GGT | Tail ], State) ->
 %beenden
 beenden([], _) -> ok;
 beenden([ GGT | Tail ], State) ->
-%%	
+%%
 %%	foreach(fun, List),
 %%
+  util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "befor receive, while initial\n"),
   {nameservice, NameService} = lists:keyfind(nameservice, 1, State),
   NameService ! {self(),{lookup, list_to_atom(GGT)}},
   receive
