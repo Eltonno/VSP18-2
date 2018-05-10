@@ -38,9 +38,10 @@ start() ->
       {ggts, []},
       {nameservice, NameService},
       %und eine Variable, in der die kleinste von den ggt-Prozessen empfangene Zahl gespeichert wird.
-      {minmi, undefined}]	,
+      {minmi, undefined}],
       %Anfangs ist der Koordinator im Zustand “initial”.
-      spawn(?MODULE, initial, [State])
+      %%spawn(?MODULE, initial, [State])
+      initial(State)
   end.
 
 %initial
@@ -49,7 +50,7 @@ initial(State) ->
   receive
     {log, StarterPID} -> util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "util:to_String(NameService)\n"),
       StarterPID ! ok;
-    %Hier sendet er dem Starter, wenn von dem Starter angefragt,
+  %Hier sendet er dem Starter, wenn von dem Starter angefragt,
   % die ggtprozessnummer, arbeitszeit, termzeit, und ggt- prozessnummer * 0.<quote>
     {From, getsteeringval} ->
       {arbeitszeit, ArbeitsZeit} = lists:keyfind(arbeitszeit, 1, State),
@@ -65,9 +66,9 @@ initial(State) ->
   %Registriert den ggt-Prozess.
     {hello, Clientname} ->
       {ggts, GGTs} = lists:keyfind(ggts, 1, State),
-      util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "util:to_String(NameService)\n"),
+      util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "GGT sendet Hallo\n"),
       %Dazu fügt der Koordinator den ggt- Prozess in seine ggt-Prozess-Liste ein.
-      NewState = lists:keystore(ggts, 1, State, {ggts, [GGTs|Clientname]}),
+      NewState = lists:keystore(ggts, 1, State, {ggts, GGTs ++ [Clientname]}),
       util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", util:to_String(Clientname) ++ "wurde in die ggt-Prozess-Liste hinzugefügt.\n"),
       initial(NewState);
     step ->
@@ -80,7 +81,18 @@ initial(State) ->
       ringbildung(GGTs, State, []),
       util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "Ring wurde erstellt. Wechselt nun in bereit-State\n"),
       %Daraufhin ist er im Zustand “bereit”.
-      bereit(lists:keystore(ggts, 1, State, {ggts, MixedGGTs}))
+      bereit(lists:keystore(ggts, 1, State, {ggts, MixedGGTs}));
+  %Der Koordinator kann durch den manuellen Befehl “kill” terminiert werden
+    kill ->
+      {ggts, GGTs} = lists:keyfind(ggts, 1, State),
+      {koordinatorname, Koordinatorname} = lists:keyfind(koordinatorname, 1, State),
+      {nameservice, NameService} = lists:keyfind(nameservice, 1, State),
+      %Hier wechselt er dann in den Zustand “beenden”, wo er zuerst alle ggt-Prozesse beendet und dann sich selbst.
+      beenden(GGTs, State),
+      util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "Alle GGTs wurden beendet und nun beendet sich auch der Koordinator. Tschüss.\n"),
+      NameService ! {self(),{unbind, Koordinatorname}},
+      %Beendet sich selbst
+      erlang:exit(self(),normal)
   end.
 
 %bereit
@@ -101,22 +113,22 @@ bereit(State) ->
     prompt ->
       prompt_ggts(GGTs, State),
       bereit(State);
-    %Empfängt die neue Mi des ggt und einen Timestamp.
+  %Empfängt die neue Mi des ggt und einen Timestamp.
     {briefmi,{Clientname,CMi,CZeit}} ->
       %Loggt dies.
       util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", atom_to_list(Clientname) ++ " liefert aktuelles Mi: " ++ integer_to_list(CMi) ++ " um " ++ util:to_String(CZeit) ++ "\n"),
       if
-        %Falls diese Mi die bisher kleinste empfangene Mi ist, wird dies dementsprechend gespeichert.
+      %Falls diese Mi die bisher kleinste empfangene Mi ist, wird dies dementsprechend gespeichert.
         CMi < MinMi -> NewState = lists:keystore(mi, 1, State, {mi, CMi}), bereit(NewState)
       end,
       bereit(State);
-    %Empfängt vom ggt das Ergebnis der beendeten Berechnung, sowie einen Timestamp.
+  %Empfängt vom ggt das Ergebnis der beendeten Berechnung, sowie einen Timestamp.
     {From, briefterm, {Clientname,CMi,CZeit}} ->
       if
-        %Dann überprüft der Koordinator ob die empfangene Mi größer als die gespeicherte kleinste Mi ist.
+      %Dann überprüft der Koordinator ob die empfangene Mi größer als die gespeicherte kleinste Mi ist.
         CMi > MinMi ->
           if
-            %Falls dies so ist und ‘korrigiere” 1 ist, teilt er dem ggt diese kleinste Zahl per “sendy” mit.
+          %Falls dies so ist und ‘korrigiere” 1 ist, teilt er dem ggt diese kleinste Zahl per “sendy” mit.
             Korrigieren == 1 ->
               From ! {sendy, MinMi},
               bereit(State);
@@ -134,7 +146,7 @@ bereit(State) ->
         util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "Lebenszustand von " ++ atom_to_list(G) ++ " ist " ++ atom_to_list(Pong) ++ "\n")
                     end, GGTs),
       bereit(State);
-    %Wechselt den Wert von “korrigiere” entweder von 0 auf 1 oder von 1 auf 0.
+  %Wechselt den Wert von “korrigiere” entweder von 0 auf 1 oder von 1 auf 0.
     toggle ->
       % Dies wird durch die Formel (“korrigiere” + 1) mod 2 getan
       bereit(lists:keystore(korrigieren, 1, State, {korrigieren, ((Korrigieren+1) rem 2)}));
@@ -150,7 +162,7 @@ bereit(State) ->
         CMi = lists:nth(index_of(G, GGTs),Mis),
         receive
           not_found -> util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "GGT ist nicht auf derm Namensservice vorhanden\n");
-          %Sendet diesen ggt-Prozessen eine Zahl
+        %Sendet diesen ggt-Prozessen eine Zahl
           {pin, GGTNameNode} -> GGTNameNode ! {setpm, CMi}
         end
                     end, GGTs),
@@ -160,12 +172,12 @@ bereit(State) ->
         Y = lists:nth(index_of(G, TwntyPrc),Ys),
         receive
           not_found -> util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "GGT ist nicht auf derm Namensservice vorhanden\n");
-          %und startet mit sendy rekursiv die Berechnung.
+        %und startet mit sendy rekursiv die Berechnung.
           {pin, GGTNameNode} -> GGTNameNode ! {sendy, Y}
         end
                     end, TwntyPrc),
       bereit(State);
-    %Der Koordinator kann durch den manuellen Befehl “kill” terminiert werden
+  %Der Koordinator kann durch den manuellen Befehl “kill” terminiert werden
     kill ->
       %Hier wechselt er dann in den Zustand “beenden”, wo er zuerst alle ggt-Prozesse beendet und dann sich selbst.
       beenden(GGTs, State),
@@ -178,7 +190,7 @@ bereit(State) ->
 ringbildung([GGT | Tail], State, GGTf) ->
   util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "befor receive, while initial\n"),
   {nameservice, NameService} = lists:keyfind(nameservice, 1, State),
-  NameService ! {self(),{lookup, list_to_atom(GGT)}},
+  NameService ! {self(),{lookup, GGT}},
   receive
     not_found -> util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "GGT ist nicht auf derm Namensservice vorhanden\n");
     {pin, GGTNameNode} ->
@@ -188,7 +200,7 @@ ringbildung([GGT | Tail], State, GGTf) ->
         {mi, Mi} ->
           util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", atom_to_list(GGT) ++ " hat aktuellen Mi: " ++ integer_to_list(Mi) ++ "\n"),
           if
-            %Den ersten GGT der Liste ans Ende der Liste packen, bis dies mit allen einmal gemacht wurde.
+          %Den ersten GGT der Liste ans Ende der Liste packen, bis dies mit allen einmal gemacht wurde.
           %Dies wird festgestellt, da alle GGTs die schon behandelt wurden in eine zweite Liste kommen, und wenn die gleichlang ist wie GGTs, wurden alle behandelt.
             erlang:length(GGTf) /= erlang:length(Tail) ->
               ringbildung([Tail|GGT], State, [GGTf | GGT])
