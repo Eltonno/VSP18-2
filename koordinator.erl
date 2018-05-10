@@ -60,6 +60,7 @@ initial(State) ->
       %Sendet From (Starter) seine Einstellungs-Werte.
       %Dies sind die Arbeitszeit, die Termzeit, die Quote, und die GGTProzessnummer.
       From ! {steeringval,ArbeitsZeit,TermZeit,Quote,GGTProzessnummer},
+      util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", util:to_String(From) ++ " die steeringval-Werte gesendet\n"),
       initial(State);
   %Registriert den ggt-Prozess.
     {hello, Clientname} ->
@@ -67,6 +68,7 @@ initial(State) ->
       util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "util:to_String(NameService)\n"),
       %Dazu fügt der Koordinator den ggt- Prozess in seine ggt-Prozess-Liste ein.
       NewState = lists:keystore(ggts, 1, State, {ggts, [GGTs|Clientname]}),
+      util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", util:to_String(Clientname) ++ "wurde in die ggt-Prozess-Liste hinzugefügt.\n"),
       initial(NewState);
     step ->
       %• Empfängt der Koordinator den Befehl “step” vom Benutzer,
@@ -76,6 +78,7 @@ initial(State) ->
       %Die Liste der registrierten ggt-Prozesse mischen
       MixedGGTs = util:shuffle(GGTs),
       ringbildung(GGTs, State, []),
+      util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "Ring wurde erstellt. Wechselt nun in bereit-State\n"),
       %Daraufhin ist er im Zustand “bereit”.
       bereit(lists:keystore(ggts, 1, State, {ggts, MixedGGTs}))
   end.
@@ -91,6 +94,7 @@ bereit(State) ->
     reset ->
       %Beendet alle ggt-Prozesse (kill), leert die ggt-Prozessliste und setzt den Zustand auf initial.
       beenden(GGTs, State),
+      util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "Alle GGTs beendet und zurück auf initial-State\n"),
       initial(lists:keystore(ggts, 1, State, {ggts, []}));
     prompt ->
       prompt_ggts(GGTs, State),
@@ -163,6 +167,7 @@ bereit(State) ->
     kill ->
       %Hier wechselt er dann in den Zustand “beenden”, wo er zuerst alle ggt-Prozesse beendet und dann sich selbst.
       beenden(GGTs, State),
+      util:logging("Koordinator@" ++ atom_to_list(node()) ++ ".log", "Alle GGTs wurden beendet und nun beendet sich auch der Koordinator. Tschüss.\n"),
       NameService ! {self(),{unbind, Koordinatorname}},
       %Beendet sich selbst
       erlang:exit(self(),normal)
