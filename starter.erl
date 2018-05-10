@@ -1,9 +1,12 @@
 -module(starter).
 -export([start/1]).
 
+%Startet den Starter mit einer eindeutigen ID.
 start(StarterID) ->
   {ok, Hostname} = inet:gethostname(),
   Logfile = "ggt" ++ integer_to_list(StarterID) ++ "@" ++ Hostname ++ ".log",
+  %Die restlichen Einstellungen werden aus der ggt.cfg-Datei ausgelesen.
+  util:logging(Logfile , "Starter gestartet")
   {ok, Config} = file:consult("ggt.cfg"),
   {ok, Koordinatorname} = vsutil:get_config_value(koordinatorname, Config),
   {ok, NameServiceNode} = vsutil:get_config_value(nameservicenode, Config),
@@ -17,7 +20,8 @@ start(StarterID) ->
   NameService = global:whereis_name(nameservice),
   NameService ! {self(),{lookup, Koordinatorname}},
   receive
-    not_found -> util:logging(Logfile , "Koordinator nicht auf Nameservice vorhanden"), KoordinatorNameNode = {errname, errnode};
+    not_found -> util:logging(Logfile , "Koordinator nicht auf Nameservice vorhanden"),
+      KoordinatorNameNode = {errname, errnode};
     {pin, {Name, Node}} -> 	pong = net_adm:ping(Node),
       KoordinatorNameNode = {Name, Node},
       {Name, Node} ! log
@@ -25,9 +29,12 @@ start(StarterID) ->
   util:logging(Logfile, util:to_String(KoordinatorNameNode) ++ "\n"),
   PID = self(),
   util:logging(Logfile, util:to_String(PID) ++ "\n"),
+  % Der Starter bekommt einige Einstellungen vom Koordinator durch “getsteeringval”.
   KoordinatorNameNode ! {PID, getsteeringval},
   receive
+    %Empfängt die Ein- stellungen und startet daraufhin die ggt-Prozesse via eigener ggt-Methode “ggt-starter”.
     {steeringval,ArbeitsZeit,TermZeit,Quote,GGTProzessnummer} ->
+      util:logging(Logfile , "Hat steeringval bekommen"),
       State = [{arbeitszeit, ArbeitsZeit},
         {termzeit, TermZeit},
         {ggtprozessnummer, GGTProzessnummer},
